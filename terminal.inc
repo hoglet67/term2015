@@ -8,6 +8,7 @@
 ;* auteur         : Kees van Oss                                              *;
 ;* date           : july 2012                                                 *;
 ;* latest update  : 23-07-2012 Initial startup                                *;
+;*                  28-11-2016 4K circular buffer, works at 115,200 baud      *;
 ;*----------------------------------------------------------------------------*;
 ;* assemble       : use CC65 for compiling the program                        *;
 ;*----------------------------------------------------------------------------*;
@@ -66,8 +67,9 @@ cur_shape       = $e1
 inputbuffer     = $100
 intvec          = $204
 tab             = $321
-via             = $B800
-via_timer1      = $B804
+via_t1_latch    = $B804
+via_acr         = $B80B
+via_ier         = $B80E
 next_param      = $C231
 printdec        = $C589
 read_param      = $C8BC
@@ -78,8 +80,13 @@ OSRDCHR         = $FE94
 newline         = $FFED
 printchr        = $FFF4
 
+; === Circular Receive Buffer ===
+rcv_buffer      = $4000         ; 0x4000 - 0x4FFF
+wrptr           = $96           ; write pointer
+rdptr           = $98           ; read pointer
+
 ; === SER ===
-int_interval    = 256           ; every 256 usec interrupt
+int_interval    = 50            ; every 50 usec interrupt, sufficient for 115,200 baud
 UART_data       = $BDB0
 UART_control    = $BDB1
 UART_status     = $BDB1
@@ -111,8 +118,12 @@ term_start:
                 jsr param_check         ; Check for legal parameters
                 jsr screenlayout        ; Print screenlayout
                 jsr ser_init            ; Init serial interface
+
 term_loop:
-                jsr OSRDCHR             ; Read character
+                jsr keyscan             ; Scan keyboard
+                bcs process_rec         ; Skip forward if no key pressed
+
+                jsr translate_key       ; Translate key code to ASCII
 
                 cmp #$7F                ; Backspace?
                 beq bs
@@ -127,7 +138,30 @@ term_loop:
                 jsr print_snd           ; Print char
                 jsr ser_snd             ; Send char to Serial
 control_chr:
-                jmp term_loop
+                jsr keyscan             ; Wait for the key to be released
+                bcc control_chr
+
+process_rec:
+                lda wrptr               ; test if any characters have been received
+                cmp rdptr
+                bne process_rec1
+                lda wrptr + 1
+                cmp rdptr + 1
+                beq term_loop
+
+process_rec1:
+                ldy #0                  ; print one character
+                lda (rdptr), y
+                jsr print_rec
+                inc rdptr               ; increment the lsb of the rdptr
+                bne process_rec
+                lda rdptr + 1           ; increment the msb of the rdptr, handling wrap
+                clc
+                adc #1
+                and #$EF
+                sta rdptr + 1
+                bne process_rec
+
 term_end:
                 sei
 
@@ -213,6 +247,10 @@ set_default:                            ; No, set default parameters
 
 end_read:
                 rts
+
+translate_key:
+                php
+                jmp $FEB1
 
 ; ==============================================================================
 ; PARAM_CHECK
@@ -320,9 +358,12 @@ screenlayout:
 ; Initialize serial interface.
 ; ==============================================================================
 ser_init:
-                lda #0                  ; reset bufferpointers
-                sta ser_rxptr
-                sta ser_rdptr
+                lda #<rcv_buffer        ; reset bufferpointers
+                sta wrptr
+                sta rdptr
+                lda #>rcv_buffer
+                sta wrptr + 1
+                sta rdptr + 1
 
                 lda divisor             ; set baudrate
                 sta UART_baudrate
@@ -342,41 +383,46 @@ ser_init:
                 sta intvec+1
 
                 lda #$c0                ; timer1 geeft int
-                sta via+$b
-                sta via+$e
+                sta via_ier
+
+                lda via_acr
+                ora #$c0                ; free running mode
+                sta via_acr
 
                 lda #<int_interval      ; zet interval tijd int
-                sta via_timer1
+                sta via_t1_latch
                 lda #>int_interval
-                sta via_timer1+1
+                sta via_t1_latch + 1
 
                 cli
                 rts
+
 new_intvec:
-                txa                     ; bewaar registers
-                pha
-                tya
-                pha
-
-                lda UART_control        ; byte in rx register
-                and #2
-                beq update_timer
-
-                lda UART_data           ; lees byte uit rx register
-
-                jsr print_rec
-update_timer:
-                lda #<int_interval      ; zet interval tijd int
-                sta via_timer1
-                lda #>int_interval
-                sta via_timer1+1
-
-                pla                     ; herstel registers
-                tay
-                pla
-                tax
-                pla
-                rti
+                lda via_t1_latch        ; 4     4
+                lda UART_control        ; 4     4
+                and #2                  ; 2     2
+                beq return              ; 2     3
+                tya                     ; 2
+                pha                     ; 3
+                ldy #0                  ; 2
+                lda UART_data           ; 4
+                sta (wrptr), Y          ; 6
+                inc wrptr               ; 5
+                bne nocarry             ; 2
+                lda wrptr + 1           ; 3
+                clc                     ; 2
+                adc #1                  ; 2
+                and #$EF                ; 2
+                sta wrptr + 1           ; 3
+nocarry:
+                pla                     ; 4
+                tay                     ; 2
+return:
+                pla                     ; 4     4
+                rti                     ; 6     6
+                                        ; --    --
+                                        ; 64    23
+                                        ; --    --
 
 ; ==============================================================================
 ; SER_SND
@@ -543,7 +589,7 @@ gotoxy:
 ; ==============================================================================
 
 print_snd:
-                sta a_tmp
+                 sta a_tmp
                  sei
                  ldx snd_x              ; Set cursor in send window
                  ldy snd_y
@@ -565,7 +611,7 @@ print_ret:
                  beq scroll_snd
                  inc snd_y
 end_print_snd:
-                lda a_tmp
+                 lda a_tmp
                  rts
 scroll_snd:
                  ldx #0
@@ -601,16 +647,10 @@ print_rec:
                  cmp #32                ; Check if ctrl-char
                  bcc end_print_rec      ; If ctrl-char, do not print
 
-                 jsr $f802
-                lda #32
-                jsr printchr            ; Print char
-                jsr printchr            ; Print char
+                 jsr printchr           ; Print char
 
+                 inc rec_x              ; Increment x-cursor
                  lda rec_x              ; If end of line, cr+lf
-                 clc
-                adc #4
-                sta rec_x               ; Increment x-cursor
-;                lda rec_x              ; If end of line, cr+lf
                  cmp #32
                  bne end_print_rec
 rec_ret:
