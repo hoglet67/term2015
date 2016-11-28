@@ -1,17 +1,17 @@
-;******************************************************************************; 
-;* S E R I A L   T E R M I N A L   2 0 1 5                               v1.0 *; 
-;*----------------------------------------------------------------------------*; 
+;******************************************************************************;
+;* S E R I A L   T E R M I N A L   2 0 1 5                               v1.0 *;
+;*----------------------------------------------------------------------------*;
 ;* function      : Terminal program for serial communication based upon       *;
-;*		   the RS232 port on an Atom2015			      *;
-;*----------------------------------------------------------------------------*; 
-;* filenaam       : terminal.inc					      *; 
-;* auteur         : Kees van Oss					      *; 
-;* date           : july 2012						      *; 
-;* latest update  : 23-07-2012 Initial startup				      *; 
-;*----------------------------------------------------------------------------*; 
-;* assemble       : use CC65 for compiling the program		              *; 
-;*----------------------------------------------------------------------------*; 
-;* usage          : TERM <baudrate>                                           *; 
+;*                 the RS232 port on an Atom2015                              *;
+;*----------------------------------------------------------------------------*;
+;* filenaam       : terminal.inc                                              *;
+;* auteur         : Kees van Oss                                              *;
+;* date           : july 2012                                                 *;
+;* latest update  : 23-07-2012 Initial startup                                *;
+;*----------------------------------------------------------------------------*;
+;* assemble       : use CC65 for compiling the program                        *;
+;*----------------------------------------------------------------------------*;
+;* usage          : TERM <baudrate>                                           *;
 ;*                  Default settings: none parity, 8 bits, 1 start/stop bit   *;
 ;*----------------------------------------------------------------------------*;
 ;* Divisor Latch Byte Values (common baud rates)
@@ -36,7 +36,7 @@
 ;*---------------------------------------------------
 ;* Bit 7    Emulate Break   Disabled       Enabled
 ;* Bit 6    Emulate Escape  Disabled       Enabled
-;* Bit 5-2  Unused		
+;* Bit 5-2  Unused
 ;* Bit 1    Rx Available    Not Available  Available
 ;* Bit 0    Tx Ready        Not Ready      Ready
 ;******************************************************************************;
@@ -47,50 +47,50 @@
 
 ; === GENERAL ===
 
-stackpointer	= $4		   ; Standaard Atom adressen
-stack1		= $16
-stack2		= $25
-stack3		= $34
-stack4		= $43
-esc_key		= $3B
-workspace	= $80
-snd_x		= $92
-snd_y		= $93
-rec_x		= $94
-rec_y		= $95
-cur_y_lb	= $de
-cur_y_hb	= $df
-cur_x		= $e0
-cur_shape	= $e1
+stackpointer    = $4               ; Standaard Atom adressen
+stack1          = $16
+stack2          = $25
+stack3          = $34
+stack4          = $43
+esc_key         = $3B
+workspace       = $80
+snd_x           = $92
+snd_y           = $93
+rec_x           = $94
+rec_y           = $95
+cur_y_lb        = $de
+cur_y_hb        = $df
+cur_x           = $e0
+cur_shape       = $e1
 
-inputbuffer	= $100
-intvec		= $204
-tab		= $321
-via		= $B800
-via_timer1	= $B804
-next_param	= $C231
-printdec	= $C589
-read_param	= $C8BC
-printnum	= $F802
-printtext	= $F7D1
-keyscan		= $FE71
+inputbuffer     = $100
+intvec          = $204
+tab             = $321
+via             = $B800
+via_timer1      = $B804
+next_param      = $C231
+printdec        = $C589
+read_param      = $C8BC
+printnum        = $F802
+printtext       = $F7D1
+keyscan         = $FE71
 OSRDCHR         = $FE94
-newline		= $FFED
-printchr	= $FFF4
+newline         = $FFED
+printchr        = $FFF4
 
 ; === SER ===
-int_interval    = 256		; every 256 usec interrupt
+int_interval    = 256           ; every 256 usec interrupt
 UART_data       = $BDB0
 UART_control    = $BDB1
 UART_status     = $BDB1
-UART_baudrate   = $BDB2		; lb/hb
+UART_baudrate   = $BDB2         ; lb/hb
 
-;***************************************************************************; 
-;* T E R M I N A L							    ; 
-;*-------------------------------------------------------------------------*; 
-;* Program to:								   *;
-;*   - read and write bytes to/from a serial port		           *;
-;***************************************************************************; 
+;***************************************************************************;
+;* T E R M I N A L                                                          ;
+;*-------------------------------------------------------------------------*;
+;* Program to:                                                             *;
+;*   - read and write bytes to/from a serial port                          *;
+;***************************************************************************;
 
 ; ==============================================================================
 ; TERM_START
@@ -99,79 +99,79 @@ UART_baudrate   = $BDB2		; lb/hb
 ; ==============================================================================
 
 term_start:
-		lda #0			; Init cursor send/receive screen
-		sta snd_x
-		sta rec_x
-		lda #1
-		sta snd_y
-		lda #8
-		sta rec_y
+                lda #0                  ; Init cursor send/receive screen
+                sta snd_x
+                sta rec_x
+                lda #1
+                sta snd_y
+                lda #8
+                sta rec_y
 
-		jsr read_params		; Read commandline parameters
-		jsr param_check		; Check for legal parameters
-		jsr screenlayout	; Print screenlayout
-		jsr ser_init		; Init serial interface
+                jsr read_params         ; Read commandline parameters
+                jsr param_check         ; Check for legal parameters
+                jsr screenlayout        ; Print screenlayout
+                jsr ser_init            ; Init serial interface
 term_loop:
-		jsr OSRDCHR		; Read character
+                jsr OSRDCHR             ; Read character
 
-		cmp #$7F		; Backspace?
-		beq bs
+                cmp #$7F                ; Backspace?
+                beq bs
 
-		cmp #$1B		; Escape?
-		beq term_end
+                cmp #$1B                ; Escape?
+                beq term_end
 
-		cmp #$0d		; Return?
-		beq crlf
-		bcc control_chr		; Control code?
+                cmp #$0d                ; Return?
+                beq crlf
+                bcc control_chr         ; Control code?
 
-		jsr print_snd		; Print char
-		jsr ser_snd		; Send char to Serial
+                jsr print_snd           ; Print char
+                jsr ser_snd             ; Send char to Serial
 control_chr:
-		jmp term_loop
+                jmp term_loop
 term_end:
-		sei
+                sei
 
-		lda old_intvec		; Restore IRQ vector
-		sta intvec
-		lda old_intvec+1
-		sta intvec+1
+                lda old_intvec          ; Restore IRQ vector
+                sta intvec
+                lda old_intvec+1
+                sta intvec+1
 
-		lda #12			; CLS
-		jmp printchr		; End of program
+                lda #12                 ; CLS
+                jmp printchr            ; End of program
 
 ;---------------------------------------------------
 ; Handling Control codes
 ;---------------------------------------------------
 
-crlf:					; Handle $0D CRLF
-		jsr print_ret
-		lda #'>'
-		jsr print_snd
-		lda #$0d
-		jsr ser_snd		; Send char to Serial
-		lda #$0a
-		jsr ser_snd		; Send char to Serial
-		jmp control_chr
-bs:					; Handle $7F Backspace
-		lda snd_x
-		beq bs_1
-		dec snd_x
-		jmp bs_end
+crlf:                                   ; Handle $0D CRLF
+                jsr print_ret
+                lda #'>'
+                jsr print_snd
+                lda #$0d
+                jsr ser_snd             ; Send char to Serial
+                lda #$0a
+                jsr ser_snd             ; Send char to Serial
+                jmp control_chr
+bs:                                     ; Handle $7F Backspace
+                lda snd_x
+                beq bs_1
+                dec snd_x
+                jmp bs_end
 bs_1:
-		lda snd_y
-		cmp #1
-		beq bs_end
-		lda #31
-		sta snd_x
-		dec snd_y
+                lda snd_y
+                cmp #1
+                beq bs_end
+                lda #31
+                sta snd_x
+                dec snd_y
 bs_end:
-		lda #' '
-		ldx snd_x
-		ldy snd_y
-		jsr gotoxy
-		jsr printchr
+                lda #' '
+                ldx snd_x
+                ldy snd_y
+                jsr gotoxy
+                jsr printchr
 
-		jmp control_chr
+                jmp control_chr
 
 ; ==============================================================================
 ; READ_PARAMS
@@ -183,36 +183,36 @@ bs_end:
 ; ==============================================================================
 
 read_params:
-		lda inputbuffer		; Check if parameters given
-		cmp #$0d
-		beq set_default
+                lda inputbuffer         ; Check if parameters given
+                cmp #$0d
+                beq set_default
 
-		ldy #0			; Yes, read parameters
-		sty 3
-		lda #<inputbuffer
-		sta 5
-		lda #>inputbuffer
-		sta 6
+                ldy #0                  ; Yes, read parameters
+                sty 3
+                lda #<inputbuffer
+                sta 5
+                lda #>inputbuffer
+                sta 6
 
-		jsr read_num		; Read baudrate
-		lda data_stack
-		sta baudrate
-		lda data_stack+1
-		sta baudrate+1
-		lda data_stack+2
-		sta baudrate+2
+                jsr read_num            ; Read baudrate
+                lda data_stack
+                sta baudrate
+                lda data_stack+1
+                sta baudrate+1
+                lda data_stack+2
+                sta baudrate+2
 
-		jmp end_read
+                jmp end_read
 
-set_default:				; No, set default parameters
+set_default:                            ; No, set default parameters
 
-		lda #<1200		; Set baudrate=1200
-		sta baudrate
-		lda #>1200
-		sta baudrate+1
+                lda #<1200              ; Set baudrate=1200
+                sta baudrate
+                lda #>1200
+                sta baudrate+1
 
 end_read:
-		rts
+                rts
 
 ; ==============================================================================
 ; PARAM_CHECK
@@ -248,7 +248,7 @@ chk_baud_loop:
 
               rts
 param_error:
-              jsr printtext		; Print error at parameter
+              jsr printtext             ; Print error at parameter
               .byte "BAUDRATE? ",$ea
               brk
 
@@ -259,60 +259,60 @@ param_error:
 ; ==============================================================================
 
 screenlayout:
-		lda #12			; CLS
-		jsr printchr
+                lda #12                 ; CLS
+                jsr printchr
 
-		lda #0			; Hide cursor
-		sta cur_shape
+                lda #0                  ; Hide cursor
+                sta cur_shape
 
-		sta tab			; Tab = 0
+                sta tab                 ; Tab = 0
 
-		sta stack2		; Stack = 0
-		sta stack3
-		sta stack4
+                sta stack2              ; Stack = 0
+                sta stack3
+                sta stack4
 
-		ldx #<frame		; Print frame
-		ldy #>frame
-		jsr buildscreen
+                ldx #<frame             ; Print frame
+                ldy #>frame
+                jsr buildscreen
 
-		ldx #0			; Cursor at 0,15
-		ldy #15
-		jsr gotoxy
+                ldx #0                  ; Cursor at 0,15
+                ldy #15
+                jsr gotoxy
 
-		lda tab			; Print baudrate
-		pha
+                lda tab                 ; Print baudrate
+                pha
 
-		lda #0			; @=0
-		sta tab
+                lda #0                  ; @=0
+                sta tab
 
-		lda baudrate
-		sta stack1
-		lda baudrate+1
-		sta stack2
-		lda baudrate+2
-		sta stack3
-		lda #0
-		sta stack4
-		jsr printdec
+                lda baudrate
+                sta stack1
+                lda baudrate+1
+                sta stack2
+                lda baudrate+2
+                sta stack3
+                lda #0
+                sta stack4
+                jsr printdec
 
-		pla
-		sta tab
+                pla
+                sta tab
 
-		jsr printtext
-		.byte ",N,8,1"
-		nop
+                jsr printtext
+                .byte ",N,8,1"
+                nop
 
-		lda #'>'		; Print prompt
-		jsr print_snd
+                lda #'>'                ; Print prompt
+                jsr print_snd
 
-		ldy #0			; Invert lines on screen
-		jsr invert_line
-		ldy #7
-		jsr invert_line
-		ldy #15
-		jsr invert_line
+                ldy #0                  ; Invert lines on screen
+                jsr invert_line
+                ldy #7
+                jsr invert_line
+                ldy #15
+                jsr invert_line
 
-		rts
+                rts
 
 ; ==============================================================================
 ; SER_INIT
@@ -320,63 +320,63 @@ screenlayout:
 ; Initialize serial interface.
 ; ==============================================================================
 ser_init:
-		lda #0			; reset bufferpointers
-		sta ser_rxptr
-		sta ser_rdptr
+                lda #0                  ; reset bufferpointers
+                sta ser_rxptr
+                sta ser_rdptr
 
-		lda divisor		; set baudrate
-		sta UART_baudrate
-		lda divisor+1
-		sta UART_baudrate+1
+                lda divisor             ; set baudrate
+                sta UART_baudrate
+                lda divisor+1
+                sta UART_baudrate+1
 
-		sei
+                sei
 
-		lda intvec		; Save interrupt vector
-		sta old_intvec
-		lda intvec+1
-		sta old_intvec+1
+                lda intvec              ; Save interrupt vector
+                sta old_intvec
+                lda intvec+1
+                sta old_intvec+1
 
-		lda #<new_intvec	; verzet interrupt vector
-		sta intvec
-		lda #>new_intvec
-		sta intvec+1
+                lda #<new_intvec        ; verzet interrupt vector
+                sta intvec
+                lda #>new_intvec
+                sta intvec+1
 
-		lda #$c0		; timer1 geeft int
-		sta via+$b
-		sta via+$e
+                lda #$c0                ; timer1 geeft int
+                sta via+$b
+                sta via+$e
 
-		lda #<int_interval	; zet interval tijd int
-		sta via_timer1
-		lda #>int_interval
-		sta via_timer1+1
+                lda #<int_interval      ; zet interval tijd int
+                sta via_timer1
+                lda #>int_interval
+                sta via_timer1+1
 
-		cli
-		rts
+                cli
+                rts
 new_intvec:
-		txa			; bewaar registers
-		pha
-		tya
-		pha
+                txa                     ; bewaar registers
+                pha
+                tya
+                pha
 
-		lda UART_control	; byte in rx register
-		and #2		 
-		beq update_timer
+                lda UART_control        ; byte in rx register
+                and #2
+                beq update_timer
 
-		lda UART_data		; lees byte uit rx register
+                lda UART_data           ; lees byte uit rx register
 
-		jsr print_rec
+                jsr print_rec
 update_timer:
-		lda #<int_interval	; zet interval tijd int
-		sta via_timer1
-		lda #>int_interval
-		sta via_timer1+1
+                lda #<int_interval      ; zet interval tijd int
+                sta via_timer1
+                lda #>int_interval
+                sta via_timer1+1
 
-		pla			; herstel registers
-		tay
-		pla
-		tax
-		pla
-		rti
+                pla                     ; herstel registers
+                tay
+                pla
+                tax
+                pla
+                rti
 
 ; ==============================================================================
 ; SER_SND
@@ -385,21 +385,21 @@ update_timer:
 ; ==============================================================================
 
 ser_snd:
-		pha			; Save byte to send
-		ldx #0
+                pha                     ; Save byte to send
+                ldx #0
 snd_loop:
-		lda UART_control
-		and #1
-		bne snd_ok
-		inx
-		bne snd_loop
-		pla
-		jmp snd_end
+                lda UART_control
+                and #1
+                bne snd_ok
+                inx
+                bne snd_loop
+                pla
+                jmp snd_end
 snd_ok:
-		pla
-		sta UART_data
+                pla
+                sta UART_data
 snd_end:
-		rts
+                rts
 
 ; ==============================================================================
 ; READ_VAR
@@ -408,22 +408,22 @@ snd_end:
 ; ==============================================================================
 
 read_var:
-		 LDY $3
-		 JSR skip_spc		; Negeer spaties
+                 LDY $3
+                 JSR skip_spc           ; Negeer spaties
 
-		 CMP #'A'		; Test of karakter, letter is
-		 BMI no_var
-		 CMP #'['
-		 BPL no_var
-		 STA data_stack
+                 CMP #'A'               ; Test of karakter, letter is
+                 BMI no_var
+                 CMP #'['
+                 BPL no_var
+                 STA data_stack
 
-		 INY			; Spring naar einde parameter
-		 STY $3
-		 JMP next_param
+                 INY                    ; Spring naar einde parameter
+                 STY $3
+                 JMP next_param
 no_var:
-		 jsr printtext
-		 .byte "PARAMETER 03",$ea
-		 BRK
+                 jsr printtext
+                 .byte "PARAMETER 03",$ea
+                 BRK
 
 ; ==============================================================================
 ; READ_NUM
@@ -432,69 +432,69 @@ no_var:
 ; ==============================================================================
 
 read_num:
-		 JSR read_param         ; Lees expressie
-		 JSR next_param         ; Spring naar einde expressie
+                 JSR read_param         ; Lees expressie
+                 JSR next_param         ; Spring naar einde expressie
 
-		 LDA stack1             ; Zet lo-byte in accu
-		 sta data_stack
-		 lda stack2
-		 sta data_stack+1
-		 lda stack3
-		 sta data_stack+2
-		 LDY #0		  	; Reset stackpointer
-		 STY stackpointer
-		 RTS
+                 LDA stack1             ; Zet lo-byte in accu
+                 sta data_stack
+                 lda stack2
+                 sta data_stack+1
+                 lda stack3
+                 sta data_stack+2
+                 LDY #0                 ; Reset stackpointer
+                 STY stackpointer
+                 RTS
 
 ; === SKIP SPATIES
 skip:
-		 INY		     	; Negeer spaties in interpreter regel
+                 INY                    ; Negeer spaties in interpreter regel
 skip_spc:
-		 LDA ($05),Y
-		 CMP #' '
-		 BEQ skip
-		 RTS
+                 LDA ($05),Y
+                 CMP #' '
+                 BEQ skip
+                 RTS
 
 ; ==============================================================================
 ; BUILDSCREEN
 ;
 ; Build screen from table.
 ; Format table: <x>,<y>,<tekst>,0
-;		$ff 
+;               $ff
 ; Input: X = lobyte table address
-;        Y = hibyte table address 
+;        Y = hibyte table address
 ; ==============================================================================
 
-frame_adr	= workspace
-screen_adr	= frame_adr+2
+frame_adr       = workspace
+screen_adr      = frame_adr+2
 
 buildscreen:
-		 stx frame_adr		; Set frame address
-		 sty frame_adr+1
+                 stx frame_adr          ; Set frame address
+                 sty frame_adr+1
 
-		 ldy #$ff
+                 ldy #$ff
 next_line:
-		 iny			; Check frame end
-		 lda (frame_adr),y
-		 cmp #$ff
-		 beq build_end
-		 sta cur_x		; Set cur_x
+                 iny                    ; Check frame end
+                 lda (frame_adr),y
+                 cmp #$ff
+                 beq build_end
+                 sta cur_x              ; Set cur_x
 
-		 iny			; Set cur_y
-		 lda (frame_adr),y
-		 tax
-		 lda scr_tab_lb,x
-		 sta cur_y_lb
-		 lda scr_tab_hb,x
-		 sta cur_y_hb
-		 iny
-build_loop:				; Build screen
-		 lda (frame_adr),y
-		 beq next_line
-		 jsr printchr
-		 iny
-		 jmp build_loop
+                 iny                    ; Set cur_y
+                 lda (frame_adr),y
+                 tax
+                 lda scr_tab_lb,x
+                 sta cur_y_lb
+                 lda scr_tab_hb,x
+                 sta cur_y_hb
+                 iny
+build_loop:                             ; Build screen
+                 lda (frame_adr),y
+                 beq next_line
+                 jsr printchr
+                 iny
+                 jmp build_loop
 build_end:
-		 rts
+                 rts
 
 ; ==============================================================================
 ; INVERT_LINE
@@ -504,19 +504,19 @@ build_end:
 ; ==============================================================================
 
 invert_line:
-		 lda scr_tab_lb,y
-		 sta screen_adr
-		 lda scr_tab_hb,y
-		 sta screen_adr+1
-		 ldy #31
+                 lda scr_tab_lb,y
+                 sta screen_adr
+                 lda scr_tab_hb,y
+                 sta screen_adr+1
+                 ldy #31
 invert_loop:
-		 lda (screen_adr),y
-		 ora #$80
-		 sta (screen_adr),y
-		 dey
-		 bpl invert_loop
-		 rts
-		 
+                 lda (screen_adr),y
+                 ora #$80
+                 sta (screen_adr),y
+                 dey
+                 bpl invert_loop
+                 rts
+
 ; ==============================================================================
 ; GOTOXY
 ;
@@ -524,17 +524,17 @@ invert_loop:
 ; ==============================================================================
 
 gotoxy:
-		 pha
+                 pha
 
-		 stx cur_x		; Set cur_x
+                 stx cur_x              ; Set cur_x
 
-		 lda scr_tab_lb,y	; Set cur_y
-		 sta cur_y_lb
-		 lda scr_tab_hb,y
-		 sta cur_y_hb
+                 lda scr_tab_lb,y       ; Set cur_y
+                 sta cur_y_lb
+                 lda scr_tab_hb,y
+                 sta cur_y_hb
 
-		 pla
-		 rts
+                 pla
+                 rts
 
 ; ==============================================================================
 ; PRINT_SND
@@ -543,47 +543,47 @@ gotoxy:
 ; ==============================================================================
 
 print_snd:
-		sta a_tmp
-		 sei
-		 ldx snd_x		; Set cursor in send window
-		 ldy snd_y
-		 jsr gotoxy
+                sta a_tmp
+                 sei
+                 ldx snd_x              ; Set cursor in send window
+                 ldy snd_y
+                 jsr gotoxy
 
-		 jsr printchr		; Print character
-		 cli
+                 jsr printchr           ; Print character
+                 cli
 
-		 inc snd_x		; Cursor to next position
-		 lda snd_x
-		 cmp #32		; If end of line CRLF
-		 bne end_print_snd
+                 inc snd_x              ; Cursor to next position
+                 lda snd_x
+                 cmp #32                ; If end of line CRLF
+                 bne end_print_snd
 print_ret:
-		 lda #0			; CR
-		 sta snd_x
+                 lda #0                 ; CR
+                 sta snd_x
 
-		 lda snd_y		; LF
-		 cmp #6
-		 beq scroll_snd
-		 inc snd_y
+                 lda snd_y              ; LF
+                 cmp #6
+                 beq scroll_snd
+                 inc snd_y
 end_print_snd:
-		lda a_tmp
-		 rts
+                lda a_tmp
+                 rts
 scroll_snd:
-		 ldx #0
+                 ldx #0
 scroll_snd_loop:
-		 lda $8040,x
-		 sta $8020,x
-		 inx
-		 cpx #160
-		 bne scroll_snd_loop
+                 lda $8040,x
+                 sta $8020,x
+                 inx
+                 cpx #160
+                 bne scroll_snd_loop
 
-		 ldx #31
-		 lda #32
+                 ldx #31
+                 lda #32
 clear_snd:
-		 sta $80c0,x
-		 dex
-		 bpl clear_snd
+                 sta $80c0,x
+                 dex
+                 bpl clear_snd
 
-		 rts		  
+                 rts
 
 ; ==============================================================================
 ; PRINT_REC
@@ -592,88 +592,88 @@ clear_snd:
 ; ==============================================================================
 
 print_rec:
-		 ldx rec_x		; Position cursor
-		 ldy rec_y
-		 jsr gotoxy
+                 ldx rec_x              ; Position cursor
+                 ldy rec_y
+                 jsr gotoxy
 
-		 cmp #$0d
+                 cmp #$0d
                  beq rec_ret
-                 cmp #32		; Check if ctrl-char
-		 bcc end_print_rec	; If ctrl-char, do not print
+                 cmp #32                ; Check if ctrl-char
+                 bcc end_print_rec      ; If ctrl-char, do not print
 
-		 jsr $f802
-		lda #32
-		jsr printchr		; Print char
-		jsr printchr		; Print char
+                 jsr $f802
+                lda #32
+                jsr printchr            ; Print char
+                jsr printchr            ; Print char
 
-		 lda rec_x		; If end of line, cr+lf
-		 clc
-		adc #4
-		sta rec_x		; Increment x-cursor
-;		 lda rec_x		; If end of line, cr+lf
-		 cmp #32
-		 bne end_print_rec
+                 lda rec_x              ; If end of line, cr+lf
+                 clc
+                adc #4
+                sta rec_x               ; Increment x-cursor
+;                lda rec_x              ; If end of line, cr+lf
+                 cmp #32
+                 bne end_print_rec
 rec_ret:
-		 lda #0
-		 sta rec_x
+                 lda #0
+                 sta rec_x
 
-		 lda rec_y		; Check scrolling window
-		 cmp #14
-		 beq scroll_rec
-		 inc rec_y
+                 lda rec_y              ; Check scrolling window
+                 cmp #14
+                 beq scroll_rec
+                 inc rec_y
 end_print_rec:
-		 rts
+                 rts
 scroll_rec:
-		 ldx #0			; Copy lines 8-14 to 7-13
+                 ldx #0                 ; Copy lines 8-14 to 7-13
 scroll_rec_loop:
-		 lda $8120,x
-		 sta $8100,x
-		 inx
-		 cpx #192
-		 bne scroll_rec_loop
+                 lda $8120,x
+                 sta $8100,x
+                 inx
+                 cpx #192
+                 bne scroll_rec_loop
 
-		 ldx #31
-		 lda #32
+                 ldx #31
+                 lda #32
 clear_rec:
-		 sta $81c0,x		; Clear line 14
-		 dex
-		 bpl clear_rec
+                 sta $81c0,x            ; Clear line 14
+                 dex
+                 bpl clear_rec
 
-		 rts		  
+                 rts
 
 ; ==============================================================================
 ; SCREENLAYOUT TABLES
 ; ==============================================================================
 
 frame:
-		 .byte 0, 0,"ATOMIC SERIAL TERMINAL      V1.0",0
-		 .byte 0, 7,"--------------------------------",0
-		 .byte 0,15,"                        ESC=END",30,0
-		 .byte $ff
+                 .byte 0, 0,"ATOMIC SERIAL TERMINAL      V1.0",0
+                 .byte 0, 7,"--------------------------------",0
+                 .byte 0,15,"                        ESC=END",30,0
+                 .byte $ff
 
 ; ==============================================================================
 ; TABLES
 ; ==============================================================================
 
 scr_tab_lb:
-		 .byte $00,$20,$40,$60,$80,$a0,$c0,$e0
-		 .byte $00,$20,$40,$60,$80,$a0,$c0,$e0
+                 .byte $00,$20,$40,$60,$80,$a0,$c0,$e0
+                 .byte $00,$20,$40,$60,$80,$a0,$c0,$e0
 scr_tab_hb:
-		 .byte $80,$80,$80,$80,$80,$80,$80,$80
-		 .byte $81,$81,$81,$81,$81,$81,$81,$81
+                 .byte $80,$80,$80,$80,$80,$80,$80,$80
+                 .byte $81,$81,$81,$81,$81,$81,$81,$81
 ;-----------------------------------
 baudrate_tbl_lb:
-		 .byte <300,<600,<1200,<2400,<4800,<9600,<19200,<38400,<57600,<115200,$ff
+                 .byte <300,<600,<1200,<2400,<4800,<9600,<19200,<38400,<57600,<115200,$ff
 baudrate_tbl_mb:
-		 .byte <(300/256),<(600/256),<(1200/256),<(2400/256),<(4800/256)
-		 .byte <(9600/256),<(19200/256),<(38400/256),<(57600/256),<(115200/256),$ff
+                 .byte <(300/256),<(600/256),<(1200/256),<(2400/256),<(4800/256)
+                 .byte <(9600/256),<(19200/256),<(38400/256),<(57600/256),<(115200/256),$ff
 baudrate_tbl_hb:
-		 .byte <(300/65536),<(600/65536),<(1200/65536),<(2400/65536),<(4800/65536)
-		 .byte <(9600/65536),<(19200/65536),<(38400/65536),<(57600/65536),<(115200/65536),$ff
+                 .byte <(300/65536),<(600/65536),<(1200/65536),<(2400/65536),<(4800/65536)
+                 .byte <(9600/65536),<(19200/65536),<(38400/65536),<(57600/65536),<(115200/65536),$ff
 baudrate_val_lb:
-		 .byte $2a,$15,$0a,$05,$82,$41,$a0,$d0,$8a,$45
+                 .byte $2a,$15,$0a,$05,$82,$41,$a0,$d0,$8a,$45
 baudrate_val_hb:
-		 .byte $68,$34,$1a,$0d,$06,$03,$01,$00,$00,$00
+                 .byte $68,$34,$1a,$0d,$06,$03,$01,$00,$00,$00
 
 ; ==============================================================================
 ; VARIABLE DECLARATION
@@ -684,7 +684,7 @@ ser_rdptr:     .byte 0
 data_stack:    .byte 0,0
 y_tmp:         .byte 0
 old_intvec:    .byte 0,0
-a_tmp:	       .byte 0
+a_tmp:         .byte 0
 
 comport:       .byte 0
 baudrate:      .byte 0,0,0
