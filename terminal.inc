@@ -85,12 +85,28 @@ rcv_buffer      = $4000                 ; 0x4000 - 0x4FFF
 wrptr           = $96                   ; write pointer
 rdptr           = $98                   ; read pointer
 
+.if VGA80
+; === VGA80 Scroll ===
+src_line        = $9A
+dst_line        = $9C
+.endif
+
 ; === SER ===
 int_interval    = 50                    ; every 50 usec interrupt, sufficient for 115,200 baud
 UART_data       = $BDB0
 UART_control    = $BDB1
 UART_status     = $BDB1
 UART_baudrate   = $BDB2                 ; lb/hb
+
+
+; Screen Size
+.if VGA80
+SCREEN_X        = 80
+SCREEN_Y        = 40
+.else
+SCREEN_X        = 32
+SCREEN_Y        = 16
+.endif
 
 ;***************************************************************************;
 ;* T E R M I N A L                                                          ;
@@ -111,7 +127,7 @@ term_start:
                 sta rec_x
                 lda #1
                 sta snd_y
-                lda #8
+                lda #SCREEN_Y / 2
                 sta rec_y
 
                 jsr read_params         ; Read commandline parameters
@@ -195,7 +211,7 @@ bs_1:
                 lda snd_y
                 cmp #1
                 beq bs_end
-                lda #31
+                lda #SCREEN_X - 1
                 sta snd_x
                 dec snd_y
 bs_end:
@@ -314,7 +330,7 @@ screenlayout:
                 jsr buildscreen
 
                 ldx #0                  ; Cursor at 0,15
-                ldy #15
+                ldy #SCREEN_Y-1
                 jsr gotoxy
 
                 lda tab                 ; Print baudrate
@@ -345,9 +361,9 @@ screenlayout:
 
                 ldy #0                  ; Invert lines on screen
                 jsr invert_line
-                ldy #7
+                ldy #SCREEN_Y / 2 - 1
                 jsr invert_line
-                ldy #15
+                ldy #SCREEN_Y - 1
                 jsr invert_line
 
                 rts
@@ -553,7 +569,7 @@ invert_line:
                 sta screen_adr
                 lda scr_tab_hb,y
                 sta screen_adr+1
-                ldy #31
+                ldy #SCREEN_X-1
 invert_loop:
                 lda (screen_adr),y
                 ora #$80
@@ -599,20 +615,27 @@ print_snd:
 
                 inc snd_x               ; Cursor to next position
                 lda snd_x
-                cmp #32                 ; If end of line CRLF
+                cmp #SCREEN_X           ; If end of line CRLF
                 bne end_print_snd
 print_ret:
                 lda #0                  ; CR
                 sta snd_x
 
                 lda snd_y               ; LF
-                cmp #6
+                cmp #SCREEN_Y / 2 - 2
                 beq scroll_snd
                 inc snd_y
 end_print_snd:
                 lda a_tmp
                 rts
 scroll_snd:
+
+.if VGA80
+                ldx #2                  ; source line
+                ldy #1                  ; destination line
+                lda #SCREEN_Y / 2 - 3   ; number of lines to copy
+                JSR vga80_scroll
+.else
                 ldx #0
 scroll_snd_loop:
                 lda $8040,x
@@ -620,11 +643,12 @@ scroll_snd_loop:
                 inx
                 cpx #160
                 bne scroll_snd_loop
+.endif
 
-                ldx #31
+                ldx #SCREEN_X - 1
                 lda #32
 clear_snd:
-                sta $80c0,x
+                sta $8000 + SCREEN_X * (SCREEN_Y / 2 - 2), x
                 dex
                 bpl clear_snd
 
@@ -650,19 +674,25 @@ print_rec:
 
                 inc rec_x               ; Increment x-cursor
                 lda rec_x               ; If end of line, cr+lf
-                cmp #32
+                cmp #SCREEN_X
                 bne end_print_rec
 rec_ret:
                 lda #0
                 sta rec_x
 
                 lda rec_y               ; Check scrolling window
-                cmp #14
+                cmp #SCREEN_Y - 2
                 beq scroll_rec
                 inc rec_y
 end_print_rec:
                 rts
 scroll_rec:
+.if VGA80
+                ldx #SCREEN_Y / 2 + 1   ; source line
+                ldy #SCREEN_Y / 2       ; destination line
+                lda #SCREEN_Y / 2 - 2   ; number of lines to copy
+                JSR vga80_scroll
+.else
                 ldx #0                  ; Copy lines 8-14 to 7-13
 scroll_rec_loop:
                 lda $8120,x
@@ -670,24 +700,79 @@ scroll_rec_loop:
                 inx
                 cpx #192
                 bne scroll_rec_loop
+.endif
 
-                ldx #31
+                ldx #SCREEN_X - 1
                 lda #32
 clear_rec:
-                sta $81c0,x             ; Clear line 14
+                sta $8000 + SCREEN_X * (SCREEN_Y - 2), x ; Clear line 14
                 dex
                 bpl clear_rec
 
                 rts
+
+.if VGA80
+vga80_scroll:
+                pha
+                lda scr_tab_lb, x
+                sta src_line
+                lda scr_tab_hb, x
+                sta src_line + 1
+                lda scr_tab_lb, y
+                sta dst_line
+                lda scr_tab_hb, y
+                sta dst_line + 1
+                pla
+                tax
+vga80_scroll1:
+                ldy #SCREEN_X - 1
+vga80_scroll2:
+                lda (src_line), y
+                sta (dst_line), y
+                dey
+                bpl vga80_scroll2
+                clc
+                lda src_line
+                adc #SCREEN_X
+                sta src_line
+                lda src_line + 1
+                adc #0
+                sta src_line + 1
+                clc
+                lda dst_line
+                adc #SCREEN_X
+                sta dst_line
+                lda dst_line + 1
+                adc #0
+                sta dst_line + 1
+                dex
+                bne vga80_scroll1
+                rts
+.endif
 
 ; ==============================================================================
 ; SCREENLAYOUT TABLES
 ; ==============================================================================
 
 frame:
-                .byte 0, 0,"ATOMIC SERIAL TERMINAL      V1.0",0
-                .byte 0, 7,"--------------------------------",0
-                .byte 0,15,"                        ESC=END",30,0
+                .byte 0, 0, "ATOMIC SERIAL TERMINAL"
+                .repeat SCREEN_X - 26
+                .byte " "
+                .endrepeat
+                .byte "V1.0",0
+
+                .byte 0, SCREEN_Y / 2 - 1
+                .repeat SCREEN_X
+                .byte "-"
+                .endrepeat
+                .byte 0
+
+                .byte 0,    SCREEN_Y - 1
+                .repeat SCREEN_X - 8
+                .byte " "
+                .endrepeat
+                .byte "ESC=END",30, 0
+
                 .byte $ff
 
 ; ==============================================================================
@@ -695,11 +780,15 @@ frame:
 ; ==============================================================================
 
 scr_tab_lb:
-                .byte $00,$20,$40,$60,$80,$a0,$c0,$e0
-                .byte $00,$20,$40,$60,$80,$a0,$c0,$e0
+        .repeat SCREEN_Y, I
+        .byte <($8000 + SCREEN_X * I)
+        .endrepeat
+
 scr_tab_hb:
-                .byte $80,$80,$80,$80,$80,$80,$80,$80
-                .byte $81,$81,$81,$81,$81,$81,$81,$81
+        .repeat SCREEN_Y, I
+        .byte >($8000 + SCREEN_X * I)
+        .endrepeat
+
 ;-----------------------------------
 baudrate_tbl_lb:
                 .byte <300,<600,<1200,<2400,<4800,<9600,<19200,<38400,<57600,<115200,$ff

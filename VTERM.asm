@@ -4,10 +4,10 @@
 ;-------------------------------------------------
         .DEFINE asm_code $3000
         .DEFINE header   1              ; Header Wouter Ras emulator
-        .DEFINE filenaam "TERM"
+        .DEFINE filenaam "VTERM"
 
-        .DEFINE VGA80    0
-
+        .DEFINE VGA80    1
+        
 .org asm_code-22*header
 
 .IF header
